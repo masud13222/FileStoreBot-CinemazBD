@@ -116,8 +116,14 @@ class BatchHandler:
             # Shorten the link if enabled
             shortened_link = await self.shortener.shorten_url(share_link)
             
+            # Prepare file names or captions
+            file_details = "\n".join(
+                f"{i+1}. {f['caption'] or f['file_name'] or 'No Name'}"
+                for i, f in enumerate(batch_data['files'])
+            )
+            
             await update.message.reply_text(
-                f"Here's your batch shareable link:\n{shortened_link}"
+                f"Here's your batch shareable link:\n{shortened_link}\n\nFiles:\n{file_details}"
             )
             
         except Exception as e:

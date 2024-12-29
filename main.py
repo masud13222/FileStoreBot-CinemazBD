@@ -132,10 +132,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("File not found!")
     else:
         await update.message.reply_text(
-            "👋 Welcome to the Bot!\n\n"
+            "👋 Welcome to the CinemazBD Bot!\n\n"
             "📤 Send me any file and I'll provide you with a shareable link.\n\n"
             "🌐 আপনাকে স্বাগতম! আমাকে যেকোনো ফাইল পাঠান এবং আমি আপনাকে একটি শেয়ারযোগ্য লিঙ্ক দেব।\n\n"
-            "🔗 Enjoy sharing your files easily!"
+            "🔗 Enjoy sharing your files easily! @CinemazBD"
         )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -190,8 +190,11 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Shorten the link if enabled
             shortened_link = await shortener.shorten_url(share_link)
             
+            # Prepare file name or caption
+            file_name_or_caption = message.caption or getattr(file, 'file_name', 'No Name')
+            
             await update.message.reply_text(
-                f"Here's your permanent shareable link:\n{shortened_link}"
+                f"Here's your permanent shareable link:\n{shortened_link}\n\nFile: {file_name_or_caption}"
             )
             
         except Exception as e:
