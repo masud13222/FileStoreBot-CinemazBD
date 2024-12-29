@@ -9,7 +9,7 @@ class BatchHandler:
     def __init__(self, db, config):
         self.db = db
         self.user_files = {}  # Store temporary files for batch processing
-        self.auto_delete = AutoDeleteHandler()
+        self.auto_delete = AutoDeleteHandler(db)
         self.shortener = Shortener(config)
         
     async def handle_batch_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
