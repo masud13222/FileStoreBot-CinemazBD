@@ -5,9 +5,15 @@ import os
 from datetime import datetime, timedelta
 
 class AutoDeleteHandler:
-    def __init__(self):
-        # Get delete time from env (in minutes)
-        self.delete_time = int(os.getenv('AUTO_DELETE_TIME', '30'))
+    def __init__(self, db):
+        # Get delete time from database
+        self.db = db
+        self.delete_time = self.get_delete_time_from_db()
+
+    def get_delete_time_from_db(self):
+        # Fetch the delete time from the database
+        settings = self.db['settings'].find_one({"name": "auto_delete_time"})
+        return settings.get('value', 30) if settings else 30
 
     async def schedule_delete(self, message: Message):
         """Schedule a message for deletion"""
