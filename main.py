@@ -13,6 +13,7 @@ from helpers.bot_settings import BotSettings
 from helpers.shortener import Shortener
 from helpers.delete_handler import DeleteHandler
 from helpers.direct_link_handler import DirectLinkHandler
+from aiohttp import web
 
 # Load environment variables
 load_dotenv()
@@ -262,6 +263,26 @@ def main():
     # Start the Bot
     print("Bot is running...")
     application.run_polling()
+
+# Define a simple health check endpoint
+async def health_check(request):
+    return web.Response(text="OK")
+
+# Create an aiohttp web application
+app = web.Application()
+app.router.add_get('/health', health_check)
+
+# Function to run the web server
+def run_web_server():
+    runner = web.AppRunner(app)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(runner.setup())
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    loop.run_until_complete(site.start())
+    print("Health check server running on port 8080")
+
+# Call the function to run the web server
+run_web_server()
 
 if __name__ == '__main__':
     main() 
