@@ -77,15 +77,22 @@ class BatchHandler:
     
     def _get_file_info(self, message):
         """Extract file information from message"""
+        file_info = None
         if message.document:
-            return {'file': message.document, 'type': 'document'}
+            file_info = {'file': message.document, 'type': 'document'}
         elif message.video:
-            return {'file': message.video, 'type': 'video'}
+            file_info = {'file': message.video, 'type': 'video'}
         elif message.audio:
-            return {'file': message.audio, 'type': 'audio'}
+            file_info = {'file': message.audio, 'type': 'audio'}
         elif message.photo:
-            return {'file': message.photo[-1], 'type': 'photo'}
-        return None
+            file_info = {'file': message.photo[-1], 'type': 'photo'}
+        
+        if file_info:
+            # Add file name or caption
+            file_info['file_name'] = getattr(file_info['file'], 'file_name', None)
+            file_info['caption'] = message.caption or file_info['file_name']
+        
+        return file_info
         
     async def _create_batch_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE, files: List[dict]):
         """Create a shareable link for batch of files"""
@@ -99,8 +106,8 @@ class BatchHandler:
                     {
                         'file_id': f['file'].file_id,
                         'file_type': f['type'],
-                        'file_name': getattr(f['file'], 'file_name', None),
-                        'caption': update.message.caption or getattr(f['file'], 'file_name', None)
+                        'file_name': f['file_name'],
+                        'caption': f['caption']
                     }
                     for f in files
                 ],
@@ -140,7 +147,10 @@ class BatchHandler:
             # Fetch auto-delete time from config
             delete_time = self.config.get('auto_delete_time', 30)
             info_msg = await update.message.reply_text(
-                f"⚠️ These files will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!"
+                f"⚠️ These files will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!\n"
+                f"🔄 Forward this File to save the files.\n\n"
+                f"⚠️ এই ফাইলগুলি {delete_time} মিনিট পর স্বয়ংক্রিয়ভাবে মুছে ফেলা হবে!\n"
+                f"🔄 ফাইলগুলি সংরক্ষণ করতে ফাইলগুলি ফরওয়ার্ড করুন।"
             )
             sent_messages.append(info_msg)
             

@@ -76,7 +76,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Fetch auto-delete time from config
                 delete_time = config.get('auto_delete_time', 30)
                 info_msg = await update.message.reply_text(
-                    f"⚠️ This file will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!"
+                    f"⚠️ This file will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!\n"
+                    f"🔄 Forward this File to save the file.\n\n"
+                    f"⚠️ এই ফাইলটি {delete_time} মিনিট পর স্বয়ংক্রিয়ভাবে মুছে ফেলা হবে!\n"
+                    f"🔄 ফাইলটি সংরক্ষণ করতে ফাইলগুলি ফরওয়ার্ড করুন।"
                 )
                 sent_messages.append(info_msg)
                 
