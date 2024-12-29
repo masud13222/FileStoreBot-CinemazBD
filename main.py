@@ -71,8 +71,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 sent_messages = []
                 
-                # Add info message about auto-delete
-                delete_time = int(os.getenv('AUTO_DELETE_TIME', '30'))
+                # Fetch auto-delete time from config
+                delete_time = config.get('auto_delete_time', 30)
                 info_msg = await update.message.reply_text(
                     f"⚠️ This file will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!"
                 )
@@ -81,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Get file info
                 file_type = file_doc.get('file_type', 'document')
                 original_caption = file_doc.get('caption', '')
-                prefix_name = db['settings'].find_one({"name": "prefix"}).get('value', '@CinemazBD')
+                prefix_name = config.get('prefix_name', '@CinemazBD')
                 
                 # Format caption
                 if original_caption:
