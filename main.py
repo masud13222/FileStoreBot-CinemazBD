@@ -14,6 +14,9 @@ from helpers.shortener import Shortener
 from helpers.delete_handler import DeleteHandler
 from helpers.direct_link_handler import DirectLinkHandler
 from aiohttp import web
+import subprocess
+import sys
+from restart import restart
 
 # Load environment variables
 load_dotenv()
@@ -38,9 +41,8 @@ direct_link_handler = DirectLinkHandler(config)
 def is_authorized(user_id: int) -> bool:
     """Check if user is admin or sudo user"""
     admin_id = int(os.getenv('ADMIN_ID', '0'))
-    sudo_users = os.getenv('SUDO_USERS', '')
-    sudo_list = [int(id.strip()) for id in sudo_users.split(',') if id.strip()]
-    return user_id == admin_id or user_id in sudo_list
+    sudo_users = config.get('sudo_users', [])
+    return user_id == admin_id or user_id in sudo_users
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
@@ -210,6 +212,14 @@ async def authorized_command(update: Update, context: ContextTypes.DEFAULT_TYPE,
     else:
         await update.message.reply_text("You don't have permission to use this command!")
 
+async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Restart the bot if the user is authorized."""
+    if is_authorized(update.effective_user.id):
+        await update.message.reply_text("Restarting the bot...")
+        restart()
+    else:
+        await update.message.reply_text("You don't have permission to restart the bot!")
+
 def main():
     """Start the bot."""
     # Create the Application
@@ -259,6 +269,9 @@ def main():
 
     # Add direct link handler
     application.add_handler(CommandHandler("gdirect", lambda u, c: authorized_command(u, c, direct_link_handler.handle_direct_link_command)))
+
+    # Add restart handler
+    application.add_handler(CommandHandler("restart", restart_command))
 
     # Start the Bot
     print("Bot is running...")
