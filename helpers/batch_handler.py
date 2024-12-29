@@ -11,6 +11,7 @@ class BatchHandler:
         self.user_files = {}  # Store temporary files for batch processing
         self.auto_delete = AutoDeleteHandler(db)
         self.shortener = Shortener(config)
+        self.config = config
         
     async def handle_batch_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /batch command"""
@@ -130,8 +131,8 @@ class BatchHandler:
         try:
             sent_messages = []
             
-            # Add info message about auto-delete
-            delete_time = int(os.getenv('AUTO_DELETE_TIME', '30'))
+            # Fetch auto-delete time from config
+            delete_time = self.config.get('auto_delete_time', 30)
             info_msg = await update.message.reply_text(
                 f"⚠️ These files will be automatically deleted after {delete_time} minute{'s' if delete_time != 1 else ''}!"
             )
@@ -141,7 +142,7 @@ class BatchHandler:
                 try:
                     file_type = file_info.get('file_type', 'document')
                     caption = file_info.get('caption', '')
-                    prefix_name = self.db['settings'].find_one({"name": "prefix"}).get('value', '@CinemazBD')
+                    prefix_name = self.config.get('prefix_name', '@CinemazBD')
                     
                     # Format caption
                     if caption:
