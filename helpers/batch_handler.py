@@ -141,7 +141,7 @@ class BatchHandler:
                 try:
                     file_type = file_info.get('file_type', 'document')
                     caption = file_info.get('caption', '')
-                    prefix_name = os.getenv('PREFIX_NAME', '')
+                    prefix_name = self.db['settings'].find_one({"name": "prefix"}).get('value', '@CinemazBD')
                     
                     # Format caption
                     if caption:

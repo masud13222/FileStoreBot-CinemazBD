@@ -29,7 +29,7 @@ config = Config(db)
 batch_handler = BatchHandler(db, config)
 user_handler = UserHandler(db)
 broadcast_handler = BroadcastHandler(db)
-auto_delete_handler = AutoDeleteHandler()
+auto_delete_handler = AutoDeleteHandler(db)
 bot_settings = BotSettings(config)
 shortener = Shortener(config)
 delete_handler = DeleteHandler(db, config)
@@ -81,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Get file info
                 file_type = file_doc.get('file_type', 'document')
                 original_caption = file_doc.get('caption', '')
-                prefix_name = os.getenv('PREFIX_NAME', '')
+                prefix_name = db['settings'].find_one({"name": "prefix"}).get('value', '@CinemazBD')
                 
                 # Format caption
                 if original_caption:
