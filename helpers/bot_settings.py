@@ -27,6 +27,7 @@ class BotSettings:
             'Sudo Users': len(self.config.get('sudo_users', [])),
             'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled',
             'Remove Names': len(self.config.get('remove_names', [])),
+            'Link Saving': 'ON' if self.config.get('link_enabled', True) else 'OFF'
         }
         
         text = "🛠 <b>Bot Settings</b>\n\n"
@@ -39,6 +40,7 @@ class BotSettings:
             [InlineKeyboardButton("👥 Sudo Users", callback_data="setting_sudo")],
             [InlineKeyboardButton("🔗 Shortener Settings", callback_data="setting_shortener")],
             [InlineKeyboardButton("🗑 Remove Names", callback_data="setting_remname")],
+            [InlineKeyboardButton("🔗 Link Saving", callback_data="toggle_link_saving")],
             [InlineKeyboardButton("📊 View All Settings", callback_data="setting_view_all")],
             [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
         ]
@@ -53,33 +55,19 @@ class BotSettings:
         if query.data == "setting_close":
             await query.message.delete()
             return
-        
-        if query.data == "setting_view_all":
-            settings = {
-                "Auto Delete Time": f"{self.config.get('auto_delete_time')} minutes",
-                "Prefix Name": self.config.get('prefix_name') or 'Not set',
-                "Sudo Users": self.config.get('sudo_users', []),
-                "Shortener": {
-                    "Status": "Enabled" if self.config.get('shortener', {}).get('enabled') else "Disabled",
-                    "API URL": self.config.get('shortener', {}).get('api_url', '')
-                }
-            }
-            text = "📊 <b>Current Settings</b>\n\n"
-            text += json.dumps(settings, indent=2)
-            keyboard = [
-                [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")],
-                [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            return
-        
-        if query.data == "setting_menu":
+            
+        if query.data == "toggle_link_saving":
+            current_state = self.config.get('link_enabled', True)
+            new_state = not current_state
+            self.config.set('link_enabled', new_state)
+            # Update settings menu
             current_settings = {
                 'Auto Delete': f"{self.config.get('auto_delete_time')} minutes",
                 'Prefix': self.config.get('prefix_name') or 'Not set',
                 'Sudo Users': len(self.config.get('sudo_users', [])),
-                'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled'
+                'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled',
+                'Remove Names': len(self.config.get('remove_names', [])),
+                'Link Saving': 'ON' if new_state else 'OFF'
             }
             
             text = "🛠 <b>Bot Settings</b>\n\n"
@@ -91,23 +79,72 @@ class BotSettings:
                 [InlineKeyboardButton("📝 Prefix Name", callback_data="setting_prefix")],
                 [InlineKeyboardButton("👥 Sudo Users", callback_data="setting_sudo")],
                 [InlineKeyboardButton("🔗 Shortener Settings", callback_data="setting_shortener")],
+                [InlineKeyboardButton("🗑 Remove Names", callback_data="setting_remname")],
+                [InlineKeyboardButton("🔗 Link Saving", callback_data="toggle_link_saving")],
                 [InlineKeyboardButton("📊 View All Settings", callback_data="setting_view_all")],
                 [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            try:
-                await query.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            except BadRequest as e:
-                if str(e) != "Message is not modified":
-                    raise e
+            await query.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
-        
+            
+        if query.data == "setting_menu":
+            # Update settings menu
+            current_settings = {
+                'Auto Delete': f"{self.config.get('auto_delete_time')} minutes",
+                'Prefix': self.config.get('prefix_name') or 'Not set',
+                'Sudo Users': len(self.config.get('sudo_users', [])),
+                'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled',
+                'Remove Names': len(self.config.get('remove_names', [])),
+                'Link Saving': 'ON' if self.config.get('link_enabled', True) else 'OFF'
+            }
+            
+            text = "🛠 <b>Bot Settings</b>\n\n"
+            for key, value in current_settings.items():
+                text += f"• <b>{key}:</b> {value}\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("⏱ Auto Delete Time", callback_data="setting_auto_delete")],
+                [InlineKeyboardButton("📝 Prefix Name", callback_data="setting_prefix")],
+                [InlineKeyboardButton("👥 Sudo Users", callback_data="setting_sudo")],
+                [InlineKeyboardButton("🔗 Shortener Settings", callback_data="setting_shortener")],
+                [InlineKeyboardButton("🗑 Remove Names", callback_data="setting_remname")],
+                [InlineKeyboardButton("🔗 Link Saving", callback_data="toggle_link_saving")],
+                [InlineKeyboardButton("📊 View All Settings", callback_data="setting_view_all")],
+                [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+            
+        if query.data == "setting_view_all":
+            settings = {
+                "Auto Delete Time": f"{self.config.get('auto_delete_time')} minutes",
+                "Prefix Name": self.config.get('prefix_name') or 'Not set',
+                "Sudo Users": self.config.get('sudo_users', []),
+                "Shortener": {
+                    "Status": "Enabled" if self.config.get('shortener', {}).get('enabled') else "Disabled",
+                    "API URL": self.config.get('shortener', {}).get('api_url', '')
+                },
+                "Remove Names": self.config.get('remove_names', []),
+                "Link Saving": "ON" if self.config.get('link_enabled', True) else "OFF"
+            }
+            text = "📊 <b>Current Settings</b>\n\n"
+            text += json.dumps(settings, indent=2)
+            keyboard = [
+                [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")],
+                [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+            
         # Handle reset button clicks
         if query.data.startswith('reset_'):
             setting_type = query.data.split('_')[1]
             await self.handle_reset(query, setting_type)
             return
-        
+            
         # Handle settings editors
         if query.data.startswith('setting_'):
             setting_type = query.data.replace('setting_', '')
@@ -117,55 +154,79 @@ class BotSettings:
     async def _show_setting_editor(self, message, setting_type, user_id):
         """Show editor for specific setting"""
         try:
-            print(f"Showing editor for setting type: {setting_type}")  # Debug print
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Reset to Default", callback_data=f"reset_{setting_type}")],
-                [InlineKeyboardButton("🔙 Back to Menu", callback_data="setting_menu")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
             text = ""
+            keyboard = []
             
-            if setting_type == "auto_delete":
-                current = self.config.get('auto_delete_time')
+            if setting_type == "shortener":
+                shortener = self.config.get('shortener', {})
+                enabled = shortener.get('enabled', False)
+                api_key = shortener.get('api_key', '')
+                api_url = shortener.get('api_url', '')
+                
                 text = (
-                    f"⏱ <b>Auto Delete Settings</b>\n\n"
-                    f"Current time: <b>{current} minutes</b>\n\n"
-                    f"Send a new value in minutes (1-1440).\n"
-                    f"Example: <code>30</code> for 30 minutes"
+                    f"🔗 <b>URL Shortener Settings</b>\n\n"
+                    f"Status: {'✅ Enabled' if enabled else '❌ Disabled'}\n"
+                    f"API Key: <code>{api_key or 'Not set'}</code>\n"
+                    f"API URL: <code>{api_url or 'Not set'}</code>\n\n"
+                    "Send settings in this format:\n"
+                    "<code>enable/disable</code> - To toggle shortener\n"
+                    "<code>key YOUR_API_KEY</code> - To set API key\n"
+                    "<code>url API_URL</code> - To set API URL\n\n"
+                    "Example:\n"
+                    "<code>enable</code>\n"
+                    "<code>key abc123</code>\n"
+                    "<code>url https://example.com/api</code>"
                 )
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Reset to Default", callback_data="reset_shortener")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]
+                ]
+                
+            elif setting_type == "auto_delete":
+                current_time = self.config.get('auto_delete_time')
+                text = (
+                    f"⏱ <b>Auto Delete Time Settings</b>\n\n"
+                    f"Current time: {current_time} minutes\n\n"
+                    "Send a number between 1-10000 to set auto delete time in minutes.\n"
+                    "Send 0 to disable auto delete."
+                )
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Reset to Default", callback_data="reset_auto_delete")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]
+                ]
                 
             elif setting_type == "prefix":
-                current = self.config.get('prefix_name')
+                current_prefix = self.config.get('prefix_name') or 'Not set'
                 text = (
-                    f"📝 <b>Prefix Settings</b>\n\n"
-                    f"Current prefix: <b>{current or 'Not set'}</b>\n\n"
-                    f"Send a new prefix.\n"
-                    f"Example: <code>@YourChannel</code>"
+                    f"📝 <b>Prefix Name Settings</b>\n\n"
+                    f"Current prefix: {current_prefix}\n\n"
+                    "Send new prefix name or 'clear' to remove prefix."
                 )
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Reset to Default", callback_data="reset_prefix")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]
+                ]
                 
             elif setting_type == "sudo":
-                current = self.config.get('sudo_users', [])
+                current_users = self.config.get('sudo_users', [])
                 text = (
                     f"👥 <b>Sudo Users Settings</b>\n\n"
-                    f"Current users: <b>{current}</b>\n\n"
-                    f"Send user IDs separated by commas.\n"
-                    f"Example: <code>123456789,987654321</code>"
+                    f"Current sudo users:\n"
                 )
+                if current_users:
+                    for i, user_id in enumerate(current_users, 1):
+                        text += f"{i}. <code>{user_id}</code>\n"
+                else:
+                    text += "No sudo users configured\n"
                 
-            elif setting_type == "shortener":
-                current = self.config.get('shortener', {})
-                text = (
-                    f"🔗 <b>Shortener Settings</b>\n\n"
-                    f"Status: <b>{'Enabled' if current.get('enabled') else 'Disabled'}</b>\n"
-                    f"API Key: <code>{current.get('api_key', '')}</code>\n"
-                    f"API URL: <code>{current.get('api_url', '')}</code>\n\n"
-                    f"Send new settings in format:\n"
-                    f"<code>enabled/disabled,api_key,api_url</code>\n\n"
-                    f"Example:\n<code>enabled,your_api_key,https://example.com/api</code>"
-                )
-
+                text += "\nSend user IDs separated by commas to add/remove.\n"
+                text += "Example: <code>123456789,987654321</code>"
+                
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Reset to Default", callback_data="reset_sudo")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]
+                ]
+                
             elif setting_type == "remname":
                 current_names = self.config.get('remove_names', [])
                 text = (
@@ -181,13 +242,19 @@ class BotSettings:
                 text += "\nSend names to add/remove separated by commas.\n"
                 text += "Example: <code>mkvcinemas,telly</code>\n"
                 text += "\nTo clear all names, send: <code>clear</code>"
+                
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Reset to Default", callback_data="reset_remname")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]
+                ]
             
             if not text:
                 raise ValueError(f"Invalid setting type: {setting_type}")
             
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
-            # Set waiting for input with message
+            # Set waiting for input
             self.waiting_for_input[user_id] = {
                 'type': setting_type,
                 'message': message,
@@ -195,9 +262,8 @@ class BotSettings:
             }
             
         except Exception as e:
-            print(f"Error in _show_setting_editor: {str(e)}")  # Debug print
-            print(f"Setting type: {setting_type}")  # Debug print
-            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="setting_menu")]]
+            print(f"Error in _show_setting_editor: {str(e)}")
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="setting_menu")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.edit_text(
                 f"❌ Error showing settings editor: {str(e)}\nPlease try again.",
@@ -214,57 +280,73 @@ class BotSettings:
             await message.edit_text("Setting update timeout. Please try again.", reply_markup=reply_markup)
     
     async def handle_setting_update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle setting update messages"""
-        user_id = update.effective_user.id
-        if user_id not in self.waiting_for_input:
-            return
-            
-        setting_info = self.waiting_for_input[user_id]
-        setting_type = setting_info['type']
-        value = update.message.text.strip()
-        message = setting_info['message']
-        
-        # Delete user's input message
+        """Handle settings update from user input"""
         try:
-            await update.message.delete()
-        except:
-            pass
-        
-        # Cancel expiry task
-        setting_info['expires'].cancel()
-        
-        try:
-            if setting_type == "auto_delete":
-                minutes = int(value)
-                if minutes < 1:
-                    raise ValueError("Minutes must be positive")
-                self.config.set('auto_delete_time', minutes)
-                success = f"✅ Auto delete time set to {minutes} minutes"
+            user_id = update.effective_user.id
+            if user_id not in self.waiting_for_input:
+                return
                 
+            setting_info = self.waiting_for_input[user_id]
+            setting_type = setting_info['type']
+            message = setting_info['message']
+            success = None
+            
+            if setting_type == "shortener":
+                text = update.message.text.lower().strip()
+                shortener = self.config.get('shortener', {})
+                
+                if text == 'enable':
+                    shortener['enabled'] = True
+                    success = "✅ Shortener enabled!"
+                elif text == 'disable':
+                    shortener['enabled'] = False
+                    success = "✅ Shortener disabled!"
+                elif text.startswith('key '):
+                    api_key = text[4:].strip()
+                    shortener['api_key'] = api_key
+                    success = "✅ API key updated!"
+                elif text.startswith('url '):
+                    api_url = text[4:].strip()
+                    shortener['api_url'] = api_url
+                    success = "✅ API URL updated!"
+                else:
+                    await update.message.reply_text(
+                        "❌ Invalid format! Please use:\n"
+                        "<code>enable</code> or <code>disable</code> - To toggle shortener\n"
+                        "<code>key YOUR_API_KEY</code> - To set API key\n"
+                        "<code>url API_URL</code> - To set API URL",
+                        parse_mode='HTML'
+                    )
+                    return
+                    
+                self.config.set('shortener', shortener)
+                
+            elif setting_type == "auto_delete":
+                try:
+                    minutes = int(update.message.text)
+                    if minutes < 0 or minutes > 10000:
+                        raise ValueError("Time must be between 0-10000 minutes")
+                    self.config.set('auto_delete_time', minutes)
+                    success = f"✅ Auto delete time set to {minutes} minutes!"
+                except ValueError as e:
+                    await update.message.reply_text(f"❌ Invalid time: {str(e)}")
+                    return
+                    
             elif setting_type == "prefix":
-                self.config.set('prefix_name', value)
-                success = f"✅ Prefix name set to: {value}"
+                self.config.set('prefix_name', update.message.text.strip())
+                success = f"✅ Prefix name set to: {update.message.text.strip()}"
                 
             elif setting_type == "sudo":
-                user_ids = [int(id.strip()) for id in value.split(',') if id.strip()]
+                user_ids = [int(id.strip()) for id in update.message.text.split(',') if id.strip()]
                 self.config.set('sudo_users', user_ids)
                 success = f"✅ Added {len(user_ids)} sudo users"
                 
-            elif setting_type == "shortener":
-                enabled, api_key, api_url = value.split(',')
-                self.config.set('shortener', {
-                    'enabled': enabled.lower() == 'enabled',
-                    'api_key': api_key.strip(),
-                    'api_url': api_url.strip()
-                })
-                success = "✅ Shortener settings updated successfully"
-
             elif setting_type == "remname":
-                if value.lower() == 'clear':
+                if update.message.text.lower() == 'clear':
                     self.config.set('remove_names', [])
                     success = "✅ Cleared all remove names"
                 else:
-                    names = [n.strip() for n in value.split(',') if n.strip()]
+                    names = [n.strip() for n in update.message.text.split(',') if n.strip()]
                     current_names = self.config.get('remove_names', [])
                     
                     # Add new names and remove duplicates
@@ -280,7 +362,8 @@ class BotSettings:
                 'Prefix': self.config.get('prefix_name') or 'Not set',
                 'Sudo Users': len(self.config.get('sudo_users', [])),
                 'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled',
-                'Remove Names': len(self.config.get('remove_names', []))
+                'Remove Names': len(self.config.get('remove_names', [])),
+                'Link Saving': 'ON' if self.config.get('link_enabled', True) else 'OFF'
             }
             
             text = f"🛠 <b>Bot Settings</b>\n\n{success}\n\n"
@@ -293,6 +376,7 @@ class BotSettings:
                 [InlineKeyboardButton("👥 Sudo Users", callback_data="setting_sudo")],
                 [InlineKeyboardButton("🔗 Shortener Settings", callback_data="setting_shortener")],
                 [InlineKeyboardButton("🗑 Remove Names", callback_data="setting_remname")],
+                [InlineKeyboardButton("🔗 Link Saving", callback_data="toggle_link_saving")],
                 [InlineKeyboardButton("📊 View All Settings", callback_data="setting_view_all")],
                 [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
             ]
@@ -338,7 +422,9 @@ class BotSettings:
                 'Auto Delete': f"{self.config.get('auto_delete_time')} minutes",
                 'Prefix': self.config.get('prefix_name') or 'Not set',
                 'Sudo Users': len(self.config.get('sudo_users', [])),
-                'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled'
+                'Shortener': 'Enabled' if self.config.get('shortener', {}).get('enabled') else 'Disabled',
+                'Remove Names': len(self.config.get('remove_names', [])),
+                'Link Saving': 'ON' if self.config.get('link_enabled', True) else 'OFF'
             }
             
             text = f"🛠 <b>Bot Settings</b>\n\n{success}\n\n"
@@ -350,6 +436,8 @@ class BotSettings:
                 [InlineKeyboardButton("📝 Prefix Name", callback_data="setting_prefix")],
                 [InlineKeyboardButton("👥 Sudo Users", callback_data="setting_sudo")],
                 [InlineKeyboardButton("🔗 Shortener Settings", callback_data="setting_shortener")],
+                [InlineKeyboardButton("🗑 Remove Names", callback_data="setting_remname")],
+                [InlineKeyboardButton("🔗 Link Saving", callback_data="toggle_link_saving")],
                 [InlineKeyboardButton("📊 View All Settings", callback_data="setting_view_all")],
                 [InlineKeyboardButton("❌ Close", callback_data="setting_close")]
             ]

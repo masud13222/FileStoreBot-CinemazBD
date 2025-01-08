@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from .auto_delete_handler import AutoDeleteHandler
 import os
 from .shortener import Shortener
+import re
 
 class BatchHandler:
     def __init__(self, db, config):
@@ -18,7 +19,15 @@ class BatchHandler:
         try:
             # Get requested file count
             if not context.args:
-                await update.message.reply_text("Please specify how many files you want to batch.\nExample: /batch 4")
+                await update.message.reply_text(
+                    "Please use /batch in one of these ways:\n\n"
+                    "1. Create new batch:\n"
+                    "/batch 4 (to create batch with 4 files)\n\n"
+                    "2. Add to existing batch:\n"
+                    "/batch https://tele.k-drama.workers.dev/batch_57179731 2\n"
+                    "Or: /batch batch_57179731 2\n"
+                    "Or: /batch 57179731 2"
+                )
                 return
                 
             count = int(context.args[0])
@@ -78,6 +87,7 @@ class BatchHandler:
     def _get_file_info(self, message):
         """Extract file information from message"""
         file_info = None
+        
         if message.document:
             file_info = {'file': message.document, 'type': 'document'}
         elif message.video:
@@ -97,9 +107,20 @@ class BatchHandler:
                 remove_names = self.config.get('remove_names', [])
                 caption_lower = caption.lower()
                 for name in remove_names:
-                    if name.lower() in caption_lower:
-                        caption = caption.replace(name, '').replace('  ', ' ').strip()
+                    name_lower = name.lower()
+                    if name_lower in caption_lower:
+                        # Find where the name appears in lowercase caption
+                        pos = caption_lower.find(name_lower)
+                        # Remove that same portion from original caption
+                        caption = caption[:pos] + caption[pos + len(name_lower):]
+                        # Update lowercase caption for next iteration
                         caption_lower = caption.lower()
+                
+                # Remove links if link saving is disabled
+                if not self.config.get('link_enabled', True):
+                    caption = re.sub(r'https?://\S+', '', caption).replace('  ', ' ').strip()
+                
+                caption = caption.strip()
             
             file_info['caption'] = caption
         
@@ -227,3 +248,156 @@ class BatchHandler:
         except Exception as e:
             print(f"Error processing batch: {str(e)}")
             await update.message.reply_text("Sorry, couldn't process the batch!") 
+
+    def _extract_batch_code(self, text: str) -> str:
+        """Extract batch code from different formats"""
+        # Try direct batch code format
+        if text.startswith('batch_'):
+            return text[6:]
+            
+        # Try full URL format
+        url_match = re.search(r'/batch_(\w+)(?:\?|$)', text)
+        if url_match:
+            return url_match.group(1)
+            
+        # Try direct code format
+        if re.match(r'^\w{8}$', text):
+            return text
+            
+        return None
+        
+    async def handle_batch_update_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /batch command with batch link/code and count"""
+        try:
+            if len(context.args) < 2:
+                await update.message.reply_text(
+                    "Please provide both batch link/code and file count.\n"
+                    "Example: /batch https://tele.k-drama.workers.dev/batch_57179731 2\n"
+                    "Or: /batch batch_57179731 2\n"
+                    "Or: /batch 57179731 2"
+                )
+                return
+                
+            # Extract batch code from different formats
+            batch_link_or_code = context.args[0]
+            count = int(context.args[1])
+            
+            # Extract batch code from different formats
+            batch_code = self._extract_batch_code(batch_link_or_code)
+            if not batch_code:
+                await update.message.reply_text("Invalid batch link or code format.")
+                return
+                
+            # Validate count
+            if count < 1 or count > 32:
+                await update.message.reply_text("Please specify a number between 1 and 32.")
+                return
+                
+            # Check if batch exists
+            batch_doc = self.db['batches'].find_one({"batch_code": batch_code})
+            if not batch_doc:
+                await update.message.reply_text("Batch not found!")
+                return
+                
+            # Store user's batch update request
+            user_id = update.effective_user.id
+            self.user_files[user_id] = {
+                'batch_code': batch_code,
+                'requested_count': count,
+                'files': [],
+                'message_id': update.message.message_id
+            }
+            
+            await update.message.reply_text(
+                f"Please send {count} files one by one to add to batch {batch_code}.\n"
+                f"Files received: 0/{count}"
+            )
+            
+        except ValueError:
+            await update.message.reply_text("Please provide a valid number for file count.")
+            
+    async def handle_batch_update_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle files for batch update"""
+        user_id = update.effective_user.id
+        if user_id not in self.user_files or 'batch_code' not in self.user_files[user_id]:
+            return False
+            
+        batch_info = self.user_files[user_id]
+        if len(batch_info['files']) >= batch_info['requested_count']:
+            return False
+            
+        # Add file to batch
+        file_info = self._get_file_info(update.message)
+        if file_info:
+            batch_info['files'].append(file_info)
+            
+            # Update progress
+            files_received = len(batch_info['files'])
+            total_files = batch_info['requested_count']
+            
+            await update.message.reply_text(
+                f"File {files_received} of {total_files} received for batch {batch_info['batch_code']}.\n"
+                f"{'Batch update complete!' if files_received == total_files else f'Send {total_files - files_received} more files.'}"
+            )
+            
+            # If batch update is complete, update the batch
+            if files_received == total_files:
+                await self._update_batch(update, context)
+                del self.user_files[user_id]
+                
+            return True
+            
+        return False
+        
+    async def _update_batch(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Update existing batch with new files"""
+        try:
+            user_id = update.effective_user.id
+            batch_info = self.user_files[user_id]
+            batch_code = batch_info['batch_code']
+            
+            # Get current batch
+            batch_doc = self.db['batches'].find_one({"batch_code": batch_code})
+            if not batch_doc:
+                await update.message.reply_text("Batch not found!")
+                return
+                
+            # Prepare new files data
+            new_files = [
+                {
+                    'file_id': f['file'].file_id,
+                    'file_type': f['type'],
+                    'file_name': f['file_name'],
+                    'caption': f['caption']
+                }
+                for f in batch_info['files']
+            ]
+            
+            # Update batch with new files
+            self.db['batches'].update_one(
+                {"batch_code": batch_code},
+                {"$push": {"files": {"$each": new_files}}}
+            )
+            
+            # Generate permanent link using worker URL
+            worker_url = os.getenv('WORKER_URL', '').rstrip('/')
+            share_link = f"{worker_url}/batch_{batch_code}"
+            
+            # Shorten the link if enabled
+            shortened_link = await self.shortener.shorten_url(share_link)
+            
+            # Prepare file names or captions for display
+            file_details = "\n".join(
+                f"{i+1}. {f['caption'] or f['file_name'] or 'No Name'}"
+                for i, f in enumerate(new_files)
+            )
+            
+            await update.message.reply_text(
+                f"Successfully added {len(new_files)} files to batch {batch_code}!\n\n"
+                f"Batch link: {shortened_link}\n\n"
+                f"Added files:\n{file_details}"
+            )
+            
+        except Exception as e:
+            print(f"Error updating batch: {str(e)}")
+            await update.message.reply_text("Sorry, couldn't update the batch!") 

@@ -21,6 +21,7 @@ import subprocess
 import sys
 from restart import restart
 from helpers.stats_handler import StatsHandler
+import re
 
 # Load environment variables
 load_dotenv()
@@ -99,11 +100,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Remove configured names from caption before sending
                 if caption:
                     remove_names = config.get('remove_names', [])
-                    caption_lower = caption.lower()
                     for name in remove_names:
-                        if name.lower() in caption_lower:
-                            caption = caption.replace(name, '').replace('  ', ' ').strip()
-                            caption_lower = caption.lower()
+                        # Simply remove the exact configured string
+                        caption = caption.replace(name, '')
+                    caption = caption.strip()
                 
                 # Format caption
                 if caption:
@@ -163,7 +163,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update.effective_user.id):
         await update.message.reply_text("You don't have permission to use this feature!")
         return
-
+        
     message = update.message
     file = None
     file_type = None
@@ -193,14 +193,27 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_code = str(abs(hash(file.file_id)))[:8]
             
             # Process caption to remove configured names
-            caption = message.caption
+            caption = message.caption or getattr(file, 'file_name', None)
             if caption:
                 remove_names = config.get('remove_names', [])
+                # Convert caption to lowercase for case-insensitive comparison
                 caption_lower = caption.lower()
+                
                 for name in remove_names:
-                    if name.lower() in caption_lower:
-                        caption = caption.replace(name, '').replace('  ', ' ').strip()
+                    # Convert name to lowercase and replace
+                    name_lower = name.lower()
+                    if name_lower in caption_lower:
+                        # Find where the name appears in lowercase caption
+                        pos = caption_lower.find(name_lower)
+                        # Remove that same portion from original caption
+                        caption = caption[:pos] + caption[pos + len(name_lower):]
+                        # Update lowercase caption for next iteration
                         caption_lower = caption.lower()
+                caption = caption.strip()
+                
+                # Remove links if link saving is disabled
+                if not config.get('link_enabled', True):
+                    caption = re.sub(r'https?://\S+', '', caption).replace('  ', ' ').strip()
             
             # Save to database
             files_collection.insert_one({
@@ -266,7 +279,11 @@ def main():
 
             # Add handlers
             application.add_handler(CommandHandler("start", start))
-            application.add_handler(CommandHandler("batch", lambda u, c: authorized_command(u, c, batch_handler.handle_batch_command)))
+            application.add_handler(CommandHandler("batch", lambda u, c: authorized_command(u, c, 
+                batch_handler.handle_batch_command if not c.args else 
+                batch_handler.handle_batch_update_command if any(['batch_' in c.args[0], '/batch_' in c.args[0], len(c.args[0]) == 8]) else 
+                batch_handler.handle_batch_command
+            )))
             application.add_handler(CommandHandler("setcaption", lambda u, c: authorized_command(u, c, caption_handler.handle_setcaption_command)))
             application.add_handler(CommandHandler("bsetcaption", lambda u, c: authorized_command(u, c, batch_caption_handler.handle_bsetcaption_command)))
             application.add_handler(CommandHandler("find", find_handler.handle_find_command))
@@ -276,6 +293,10 @@ def main():
             async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # First check if this is for caption change
                 if await caption_handler.handle_file_for_caption(update, context):
+                    return
+                    
+                # Then try batch update handler
+                if await batch_handler.handle_batch_update_file(update, context):
                     return
                     
                 # Then try batch handler
