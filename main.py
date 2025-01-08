@@ -13,11 +13,14 @@ from helpers.bot_settings import BotSettings
 from helpers.shortener import Shortener
 from helpers.delete_handler import DeleteHandler
 from helpers.direct_link_handler import DirectLinkHandler
+from helpers.batch_caption_handler import BatchCaptionHandler
+from helpers.caption_handler import CaptionHandler
+from helpers.find_handler import FindHandler
 from aiohttp import web
 import subprocess
 import sys
 from restart import restart
-from helpers.caption_handler import CaptionHandler
+from helpers.stats_handler import StatsHandler
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +42,9 @@ shortener = Shortener(config)
 delete_handler = DeleteHandler(db, config)
 direct_link_handler = DirectLinkHandler(config)
 caption_handler = CaptionHandler(config)
+batch_caption_handler = BatchCaptionHandler(config)
+find_handler = FindHandler(config)
+stats_handler = StatsHandler(config)
 
 def is_authorized(user_id: int) -> bool:
     """Check if user is admin or sudo user"""
@@ -249,65 +255,78 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Start the bot."""
-    # Create the Application
-    application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
+    while True:
+        try:
+            # Create the Application
+            application = Application.builder().token(os.getenv('BOT_TOKEN')).build()
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("batch", lambda u, c: authorized_command(u, c, batch_handler.handle_batch_command)))
-    application.add_handler(CommandHandler("setcaption", lambda u, c: authorized_command(u, c, caption_handler.handle_setcaption_command)))
-    
-    # Update file handler
-    async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # First check if this is for caption change
-        if await caption_handler.handle_file_for_caption(update, context):
-            return
+            # Register find handler's pagination callback
+            find_handler.register_handlers(application)
+            stats_handler.register_handlers(application)
+
+            # Add handlers
+            application.add_handler(CommandHandler("start", start))
+            application.add_handler(CommandHandler("batch", lambda u, c: authorized_command(u, c, batch_handler.handle_batch_command)))
+            application.add_handler(CommandHandler("setcaption", lambda u, c: authorized_command(u, c, caption_handler.handle_setcaption_command)))
+            application.add_handler(CommandHandler("bsetcaption", lambda u, c: authorized_command(u, c, batch_caption_handler.handle_bsetcaption_command)))
+            application.add_handler(CommandHandler("find", find_handler.handle_find_command))
+            application.add_handler(CommandHandler("stats", lambda u, c: authorized_command(u, c, stats_handler.handle_stats_command)))
             
-        # Then try batch handler
-        is_batch = await batch_handler.handle_batch_file(update, context)
-        if not is_batch:
-            # If not part of batch, handle as single file
-            await handle_file(update, context)
-    
-    application.add_handler(MessageHandler(
-        (filters.AUDIO | 
-         filters.Document.ALL | 
-         filters.PHOTO | 
-         filters.VIDEO | 
-         filters.VOICE | 
-         filters.VIDEO_NOTE),
-        file_handler
-    ))
+            # Update file handler
+            async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                # First check if this is for caption change
+                if await caption_handler.handle_file_for_caption(update, context):
+                    return
+                    
+                # Then try batch handler
+                is_batch = await batch_handler.handle_batch_file(update, context)
+                if not is_batch:
+                    # If not part of batch, handle as single file
+                    await handle_file(update, context)
+            
+            application.add_handler(MessageHandler(
+                (filters.AUDIO | 
+                 filters.Document.ALL | 
+                 filters.PHOTO | 
+                 filters.VIDEO | 
+                 filters.VOICE | 
+                 filters.VIDEO_NOTE),
+                file_handler
+            ))
 
-    # Add new handlers
-    application.add_handler(CommandHandler("users", lambda u, c: authorized_command(u, c, user_handler.get_users_count)))
-    application.add_handler(CommandHandler("broadcast", lambda u, c: authorized_command(u, c, broadcast_handler.broadcast_message)))
+            # Add new handlers
+            application.add_handler(CommandHandler("users", lambda u, c: authorized_command(u, c, user_handler.get_users_count)))
+            application.add_handler(CommandHandler("broadcast", lambda u, c: authorized_command(u, c, broadcast_handler.broadcast_message)))
 
-    # Add settings handler
-    application.add_handler(CommandHandler("bset", lambda u, c: authorized_command(u, c, bot_settings.handle_settings)))
-    application.add_handler(CallbackQueryHandler(bot_settings.handle_callback))
+            # Add settings handler
+            application.add_handler(CommandHandler("bset", lambda u, c: authorized_command(u, c, bot_settings.handle_settings)))
+            application.add_handler(CallbackQueryHandler(bot_settings.handle_callback))
 
-    # Add message handler for settings update
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        lambda u, c: caption_handler.handle_caption_update(u, c) if u.effective_user.id in caption_handler.waiting_for_caption else bot_settings.handle_setting_update(u, c)
-    ))
+            # Add message handler for settings update
+            application.add_handler(MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                lambda u, c: caption_handler.handle_caption_update(u, c) if u.effective_user.id in caption_handler.waiting_for_caption else bot_settings.handle_setting_update(u, c)
+            ))
 
-    # Add error handler
-    application.add_error_handler(error_handler)
+            # Add error handler
+            application.add_error_handler(error_handler)
 
-    # Add delete handler
-    application.add_handler(CommandHandler("del", lambda u, c: authorized_command(u, c, delete_handler.handle_delete)))
+            # Add delete handler
+            application.add_handler(CommandHandler("del", lambda u, c: authorized_command(u, c, delete_handler.handle_delete)))
 
-    # Add direct link handler
-    application.add_handler(CommandHandler("gdirect", lambda u, c: authorized_command(u, c, direct_link_handler.handle_direct_link_command)))
+            # Add direct link handler
+            application.add_handler(CommandHandler("gdirect", lambda u, c: authorized_command(u, c, direct_link_handler.handle_direct_link_command)))
 
-    # Add restart handler
-    application.add_handler(CommandHandler("restart", restart_command))
+            # Add restart handler
+            application.add_handler(CommandHandler("restart", restart_command))
 
-    # Start the Bot
-    print("Bot is running...")
-    application.run_polling()
+            # Start the Bot
+            print("Bot is running...")
+            application.run_polling()
+
+        except Exception as e:
+            print(f"Error in main loop: {str(e)}")
+            time.sleep(5)
 
 # Define a simple health check endpoint
 async def health_check(request):
