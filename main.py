@@ -17,6 +17,7 @@ from aiohttp import web
 import subprocess
 import sys
 from restart import restart
+from helpers.caption_handler import CaptionHandler
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +38,7 @@ bot_settings = BotSettings(config)
 shortener = Shortener(config)
 delete_handler = DeleteHandler(db, config)
 direct_link_handler = DirectLinkHandler(config)
+caption_handler = CaptionHandler(config)
 
 def is_authorized(user_id: int) -> bool:
     """Check if user is admin or sudo user"""
@@ -253,15 +255,20 @@ def main():
     # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("batch", lambda u, c: authorized_command(u, c, batch_handler.handle_batch_command)))
+    application.add_handler(CommandHandler("setcaption", lambda u, c: authorized_command(u, c, caption_handler.handle_setcaption_command)))
     
     # Update file handler
     async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # First try batch handler
+        # First check if this is for caption change
+        if await caption_handler.handle_file_for_caption(update, context):
+            return
+            
+        # Then try batch handler
         is_batch = await batch_handler.handle_batch_file(update, context)
         if not is_batch:
             # If not part of batch, handle as single file
             await handle_file(update, context)
-            
+    
     application.add_handler(MessageHandler(
         (filters.AUDIO | 
          filters.Document.ALL | 
@@ -283,7 +290,7 @@ def main():
     # Add message handler for settings update
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
-        bot_settings.handle_setting_update
+        lambda u, c: caption_handler.handle_caption_update(u, c) if u.effective_user.id in caption_handler.waiting_for_caption else bot_settings.handle_setting_update(u, c)
     ))
 
     # Add error handler
